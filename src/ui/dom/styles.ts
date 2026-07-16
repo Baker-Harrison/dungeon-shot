@@ -133,6 +133,21 @@ export function ensureStyles(): void {
     #upgrade-overlay .upgrade-opt .opt-name, #pause-overlay .upgrade-opt .opt-name {
       color: #68d391;
     }
+    #upgrade-overlay .upgrade-opt .opt-rarity, #pause-overlay .upgrade-opt .opt-rarity {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      margin-right: 4px;
+    }
+    #upgrade-overlay .upgrade-opt .rarity-common, #pause-overlay .upgrade-opt .rarity-common {
+      color: #a0aec0;
+    }
+    #upgrade-overlay .upgrade-opt .rarity-uncommon, #pause-overlay .upgrade-opt .rarity-uncommon {
+      color: #68d391;
+    }
+    #upgrade-overlay .upgrade-opt .rarity-rare, #pause-overlay .upgrade-opt .rarity-rare {
+      color: #f6ad55;
+    }
     #upgrade-overlay .upgrade-opt .opt-desc, #pause-overlay .upgrade-opt .opt-desc {
       color: #6b8f7a;
       font-size: 12px;

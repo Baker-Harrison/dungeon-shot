@@ -10,6 +10,7 @@ export interface Projectile {
   vz: number;
   damage: number;
   pierceLeft: number;
+  ricochetLeft: number;
   fromPlayer: boolean;
   alive: boolean;
   hitIds: Set<number>;
@@ -30,6 +31,7 @@ export class ProjectileSystem {
     damage: number,
     pierce: number,
     fromPlayer: boolean,
+    ricochet = false,
   ): void {
     const color = fromPlayer ? COLORS.bullet : COLORS.enemyBullet;
     const mesh = new THREE.Mesh(
@@ -46,6 +48,7 @@ export class ProjectileSystem {
       vz: d.z * speed,
       damage,
       pierceLeft: pierce,
+      ricochetLeft: fromPlayer && ricochet ? 1 : 0,
       fromPlayer,
       alive: true,
       hitIds: new Set(),
@@ -65,23 +68,42 @@ export class ProjectileSystem {
       p.mesh.position.z += p.vz * dt;
 
       const { x, y, z } = p.mesh.position;
-      if (
-        y < 0.05 ||
-        y > 4 ||
-        Math.abs(x) > roomHalfW ||
-        Math.abs(z) > roomHalfD
-      ) {
+      if (y < 0.05 || y > 4) {
         this.kill(p);
         continue;
       }
+
+      if (Math.abs(x) > roomHalfW) {
+        if (!this.tryRicochet(p, 'x')) continue;
+      }
+      if (Math.abs(z) > roomHalfD) {
+        if (!this.tryRicochet(p, 'z')) continue;
+      }
+
       for (const c of colliders) {
         if (circleHitsAabb(x, z, 0.1, c)) {
-          this.kill(p);
-          break;
+          const axis =
+            Math.abs(p.vx) >= Math.abs(p.vz) ? 'x' : 'z';
+          if (!this.tryRicochet(p, axis)) break;
         }
       }
     }
     this.gc();
+  }
+
+  /** Returns false if the projectile was killed. */
+  private tryRicochet(p: Projectile, axis: 'x' | 'z'): boolean {
+    if (p.ricochetLeft <= 0) {
+      this.kill(p);
+      return false;
+    }
+    p.ricochetLeft -= 1;
+    if (axis === 'x') p.vx *= -1;
+    else p.vz *= -1;
+    // Nudge off the surface so we don't immediately re-hit.
+    p.mesh.position.x += Math.sign(p.vx) * 0.15;
+    p.mesh.position.z += Math.sign(p.vz) * 0.15;
+    return true;
   }
 
   kill(p: Projectile): void {

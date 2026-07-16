@@ -1,5 +1,11 @@
-import { createRng, pickN, randomInt } from '../util/rng';
+import { createRng, randomInt } from '../util/rng';
 import type { EnemyKind } from '../data/enemies';
+import { enemyPoolForSection } from '../data/sectionThreat';
+import {
+  RARITY_WEIGHT,
+  type UpgradeDef,
+  type UpgradeRarity,
+} from '../data/upgrades';
 import { pickCombatLayout } from './layouts';
 import {
   DIR_DELTA,
@@ -19,10 +25,13 @@ function roomId(x: number, y: number): string {
   return `${x},${y}`;
 }
 
-function combatEnemies(rng: () => number, depth: number): EnemyKind[] {
-  const count = randomInt(rng, 2, 3 + Math.min(2, Math.floor(depth / 2)));
-  const pool: EnemyKind[] =
-    depth >= 2 ? ['chaser', 'chaser', 'shooter'] : ['chaser'];
+/** Roll combat Enemy kinds for a Chamber in the given Section. */
+export function combatEnemiesForSection(
+  rng: () => number,
+  sectionIndex: number,
+): EnemyKind[] {
+  const pool = enemyPoolForSection(sectionIndex);
+  const count = randomInt(rng, 2, 3 + Math.min(2, sectionIndex));
   const enemies: EnemyKind[] = [];
   for (let i = 0; i < count; i++) {
     enemies.push(pool[Math.floor(rng() * pool.length)]!);
@@ -180,7 +189,6 @@ export function generateDungeon(seed: number): Dungeon {
 
   let frontier: RoomNode[] = [start];
   let combatCount = 0;
-  let depth = 0;
   let bossId = '';
 
   for (let sectionIndex = 0; sectionIndex < sectionCount; sectionIndex++) {
@@ -200,7 +208,6 @@ export function generateDungeon(seed: number): Dungeon {
       const nx = from.x + DIR_DELTA[dir].x;
       const ny = from.y + DIR_DELTA[dir].y;
       const id = roomId(nx, ny);
-      depth += 1;
       combatCount += 1;
       sectionCombat += 1;
       const node = makeRoom(
@@ -210,7 +217,7 @@ export function generateDungeon(seed: number): Dungeon {
         nx,
         ny,
         sectionIndex,
-        combatEnemies(rng, depth),
+        combatEnemiesForSection(rng, sectionIndex),
         false,
       );
       attachRoom(from, node, dir, rooms, occupied);
@@ -272,7 +279,6 @@ export function generateDungeon(seed: number): Dungeon {
       const ex = mini.x + DIR_DELTA[entryDir].x;
       const ey = mini.y + DIR_DELTA[entryDir].y;
       const entryId = roomId(ex, ey);
-      depth += 1;
       combatCount += 1;
       const entry = makeRoom(
         rng,
@@ -281,7 +287,7 @@ export function generateDungeon(seed: number): Dungeon {
         ex,
         ey,
         sectionIndex + 1,
-        combatEnemies(rng, depth),
+        combatEnemiesForSection(rng, sectionIndex + 1),
         false,
       );
       attachRoom(mini, entry, entryDir, rooms, occupied);
@@ -301,12 +307,31 @@ export function generateDungeon(seed: number): Dungeon {
   };
 }
 
+function rarityWeight(u: { rarity?: UpgradeRarity }): number {
+  return u.rarity ? RARITY_WEIGHT[u.rarity] : 1;
+}
+
+/** Weighted unique draft: commons offered more often than rares. */
 export function rollUpgradeChoices(
   seed: number,
   roomsCleared: number,
-  pool: { id: string }[],
+  pool: UpgradeDef[] | { id: string; rarity?: UpgradeRarity }[],
   count = 3,
 ): string[] {
   const rng = createRng(seed ^ (roomsCleared * 0x9e3779b9));
-  return pickN(rng, pool, count).map((u) => u.id);
+  const remaining = [...pool];
+  const result: string[] = [];
+  while (result.length < count && remaining.length > 0) {
+    const total = remaining.reduce((sum, u) => sum + rarityWeight(u), 0);
+    let roll = rng() * total;
+    let idx = 0;
+    for (; idx < remaining.length; idx++) {
+      roll -= rarityWeight(remaining[idx]!);
+      if (roll <= 0) break;
+    }
+    if (idx >= remaining.length) idx = remaining.length - 1;
+    const picked = remaining.splice(idx, 1)[0]!;
+    result.push(picked.id);
+  }
+  return result;
 }

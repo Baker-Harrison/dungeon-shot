@@ -18,6 +18,7 @@ export const COLORS = {
   enemyBullet: 0xfc8181,
   chaser: 0xe53e3e,
   shooter: 0xd69e2e,
+  tank: 0x718096,
   miniBoss: 0xed8936,
   boss: 0x9f7aea,
 } as const;

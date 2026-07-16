@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { ENEMY_DEFS, type EnemyKind } from '../data/enemies';
+import { scaleEnemyDef } from '../data/sectionThreat';
 import { COLORS } from '../util/constants';
 import type { Aabb } from './colliders';
 import { moveWithColliders } from './colliders';
@@ -81,8 +82,14 @@ export class EnemySystem {
     this.scene = scene;
   }
 
-  spawn(kind: EnemyKind, x: number, z: number, now: number): void {
-    const def = ENEMY_DEFS[kind];
+  spawn(
+    kind: EnemyKind,
+    x: number,
+    z: number,
+    now: number,
+    sectionIndex = 0,
+  ): void {
+    const def = scaleEnemyDef(ENEMY_DEFS[kind], sectionIndex);
     const color =
       kind === 'boss'
         ? COLORS.boss
@@ -90,9 +97,25 @@ export class EnemySystem {
           ? COLORS.miniBoss
           : kind === 'shooter'
             ? COLORS.shooter
-            : COLORS.chaser;
-    const r = kind === 'boss' ? 0.7 : kind === 'miniBoss' ? 0.55 : 0.4;
-    const h = kind === 'boss' ? 2.2 : kind === 'miniBoss' ? 1.9 : 1.6;
+            : kind === 'tank'
+              ? COLORS.tank
+              : COLORS.chaser;
+    const r =
+      kind === 'boss'
+        ? 0.7
+        : kind === 'miniBoss'
+          ? 0.55
+          : kind === 'tank'
+            ? 0.55
+            : 0.4;
+    const h =
+      kind === 'boss'
+        ? 2.2
+        : kind === 'miniBoss'
+          ? 1.9
+          : kind === 'tank'
+            ? 1.8
+            : 1.6;
 
     const root = new THREE.Group();
     root.position.set(x, 0, z);
@@ -155,10 +178,11 @@ export class EnemySystem {
       const dz = playerZ - ez;
       const dist = Math.hypot(dx, dz) || 1;
 
-      if (e.kind === 'chaser') {
+      if (e.kind === 'chaser' || e.kind === 'tank') {
         const nx = (dx / dist) * e.speed * dt;
         const nz = (dz / dist) * e.speed * dt;
-        const next = moveWithColliders(ex, ez, nx, nz, 0.4, colliders);
+        const radius = e.kind === 'tank' ? 0.55 : 0.4;
+        const next = moveWithColliders(ex, ez, nx, nz, radius, colliders);
         e.mesh.position.x = next.x;
         e.mesh.position.z = next.z;
       } else if (e.kind === 'shooter') {

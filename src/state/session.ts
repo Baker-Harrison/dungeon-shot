@@ -60,6 +60,9 @@ export function applyRunUpgrade(id: UpgradeId): void {
       fireCooldownMs: run.fireCooldownMs,
       moveSpeed: run.moveSpeed,
       pierce: run.pierce,
+      spreadMult: run.spreadMult,
+      ricochet: run.ricochet,
+      lifesteal: run.lifesteal,
     },
     id,
   );
@@ -69,6 +72,9 @@ export function applyRunUpgrade(id: UpgradeId): void {
   run.fireCooldownMs = next.fireCooldownMs;
   run.moveSpeed = next.moveSpeed;
   run.pierce = next.pierce;
+  run.spreadMult = next.spreadMult ?? 1;
+  run.ricochet = next.ricochet;
+  run.lifesteal = next.lifesteal;
   run.pickedUpgrades.push(id);
 }
 

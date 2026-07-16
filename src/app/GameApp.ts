@@ -7,6 +7,8 @@ import {
   metaUpgradeCost,
   type MetaUpgradeId,
 } from '../data/metaUpgrades';
+import { applyAmmoPickup, reloadAmmo, trySpendAmmo } from '../data/ammo';
+import { aimWithSpread, getWeapon } from '../data/weapons';
 import {
   applyRunUpgrade,
   getMeta,
@@ -36,6 +38,19 @@ import { ensureStyles, el } from '../ui/dom/styles';
 
 type Screen = 'menu' | 'run' | 'results' | 'hub';
 
+interface AmmoPickup {
+  mesh: THREE.Mesh;
+  amount: number;
+  alive: boolean;
+}
+
+const AMMO_PICKUP_AMOUNT = 8;
+const RARITY_LABEL: Record<string, string> = {
+  common: 'COMMON',
+  uncommon: 'UNCOMMON',
+  rare: 'RARE',
+};
+
 export class GameApp {
   private renderer: THREE.WebGLRenderer;
   private scene = new THREE.Scene();
@@ -59,6 +74,8 @@ export class GameApp {
   private roomRoot: THREE.Group | null = null;
   private enemies: EnemySystem;
   private projectiles: ProjectileSystem;
+  private ammoPickups: AmmoPickup[] = [];
+  private reloadWasDown = false;
 
   private screen: Screen = 'menu';
   private doorsLocked = false;
@@ -331,6 +348,7 @@ export class GameApp {
   }
 
   private clearWorld(): void {
+    this.clearAmmoPickups();
     this.enemies.clear();
     this.projectiles.clear();
     if (this.roomRoot) {
@@ -347,6 +365,31 @@ export class GameApp {
       this.roomRoot = null;
     }
     this.built = null;
+  }
+
+  private clearAmmoPickups(): void {
+    for (const p of this.ammoPickups) {
+      if (p.alive) {
+        this.scene.remove(p.mesh);
+        p.mesh.geometry.dispose();
+        (p.mesh.material as THREE.Material).dispose();
+      }
+    }
+    this.ammoPickups = [];
+  }
+
+  private spawnAmmoPickup(x: number, z: number, amount = AMMO_PICKUP_AMOUNT): void {
+    const mesh = new THREE.Mesh(
+      new THREE.BoxGeometry(0.35, 0.25, 0.35),
+      new THREE.MeshStandardMaterial({
+        color: 0xf6e05e,
+        emissive: 0x744210,
+        emissiveIntensity: 0.4,
+      }),
+    );
+    mesh.position.set(x, 0.2, z);
+    this.scene.add(mesh);
+    this.ammoPickups.push({ mesh, amount, alive: true });
   }
 
   private loadRoom(roomId: string): void {
@@ -382,8 +425,15 @@ export class GameApp {
             : Math.min(3.5, Math.min(this.built!.width, this.built!.depth) * 0.2);
         const ex = Math.cos(angle) * dist;
         const ez = Math.sin(angle) * dist;
-        this.enemies.spawn(kind, ex, ez, this.clock);
+        this.enemies.spawn(kind, ex, ez, this.clock, room.sectionIndex);
       });
+    }
+
+    if (room.type === 'combat' || room.type === 'miniBoss' || room.type === 'boss') {
+      const hw = this.built.width * 0.28;
+      const hd = this.built.depth * 0.28;
+      this.spawnAmmoPickup(hw, hd);
+      this.spawnAmmoPickup(-hw, -hd);
     }
 
     this.travelLockUntil = this.clock + 600;
@@ -394,9 +444,10 @@ export class GameApp {
     if (this.screen !== 'run') return;
     const run = getRun();
     const room = run.dungeon.rooms[run.currentRoomId]!;
+    const weapon = getWeapon(run.weaponId);
     this.hpEl.style.color = run.hp <= 1 ? '#fc8181' : '#e2e8f0';
-    this.hpEl.textContent = `HP ${run.hp}/${run.maxHp}   DMG ${run.damage}   Pierce ${run.pierce}`;
-    this.metaEl.textContent = `SEC ${room.sectionIndex + 1}/${run.dungeon.sectionCount}   ${room.type.toUpperCase()}   ${run.roomsCleared}/${run.dungeon.combatCount} cleared   $${run.currencyEarned}   [M] map`;
+    this.hpEl.textContent = `HP ${run.hp}/${run.maxHp}   AMMO ${run.mag}/${run.maxMag} | ${run.reserve}   ${weapon.name}   DMG ${run.damage}   Pierce ${run.pierce}`;
+    this.metaEl.textContent = `SEC ${room.sectionIndex + 1}/${run.dungeon.sectionCount}   ${room.type.toUpperCase()}   ${run.roomsCleared}/${run.dungeon.combatCount} cleared   $${run.currencyEarned}   [R] reload   [M] map`;
     this.drawMinimap();
   }
 
@@ -742,8 +793,13 @@ export class GameApp {
 
       const line = el('div');
       const key = el('span', 'opt-key', `[${i + 1}] `);
-      const name = el('span', 'opt-name', def.name);
-      line.append(key, name);
+      const rarity = el(
+        'span',
+        `opt-rarity rarity-${def.rarity}`,
+        RARITY_LABEL[def.rarity] ?? def.rarity.toUpperCase(),
+      );
+      const name = el('span', 'opt-name', ` ${def.name}`);
+      line.append(key, rarity, name);
       btn.append(line, el('div', 'opt-desc', def.description));
 
       let pressed = false;
@@ -1007,19 +1063,86 @@ export class GameApp {
           this.built.depth / 2 + 1,
         );
 
-        // Player fire
+        // Player fire (Ammo + Weapon fire pattern)
+        const reloadDown = this.input.keys.has('KeyR');
+        if (reloadDown && !this.reloadWasDown) {
+          const ammo = reloadAmmo({
+            mag: run.mag,
+            reserve: run.reserve,
+            maxMag: run.maxMag,
+            maxReserve: run.maxReserve,
+          });
+          run.mag = ammo.mag;
+          run.reserve = ammo.reserve;
+          this.refreshHud();
+        }
+        this.reloadWasDown = reloadDown;
+
         if (this.input.fireHeld && now >= this.fireTimer) {
-          this.fireTimer = now + run.fireCooldownMs;
-          const origin = this.controller.camera.position.clone();
-          const dir = this.controller.forward();
-          this.projectiles.spawn(
-            origin,
-            dir,
-            BASE_STATS.bulletSpeed,
-            run.damage,
-            run.pierce,
-            true,
+          const spent = trySpendAmmo(
+            {
+              mag: run.mag,
+              reserve: run.reserve,
+              maxMag: run.maxMag,
+              maxReserve: run.maxReserve,
+            },
+            1,
           );
+          if (spent) {
+            run.mag = spent.mag;
+            run.reserve = spent.reserve;
+            this.fireTimer = now + run.fireCooldownMs;
+            const weapon = getWeapon(run.weaponId);
+            const origin = this.controller.camera.position.clone();
+            const forward = this.controller.forward();
+            for (let i = 0; i < weapon.pelletCount; i++) {
+              const spread = aimWithSpread(
+                forward,
+                weapon.spreadDeg * (run.spreadMult ?? 1),
+              );
+              const dir = new THREE.Vector3(spread.x, spread.y, spread.z);
+              this.projectiles.spawn(
+                origin,
+                dir,
+                weapon.bulletSpeed,
+                run.damage,
+                run.pierce,
+                true,
+                !!run.ricochet,
+              );
+            }
+            this.refreshHud();
+          }
+        }
+
+        // Walk-over Ammo pickups
+        for (const pickup of this.ammoPickups) {
+          if (!pickup.alive) continue;
+          const dx = this.controller.x - pickup.mesh.position.x;
+          const dz = this.controller.z - pickup.mesh.position.z;
+          if (dx * dx + dz * dz < 0.7 * 0.7) {
+            const next = applyAmmoPickup(
+              {
+                mag: run.mag,
+                reserve: run.reserve,
+                maxMag: run.maxMag,
+                maxReserve: run.maxReserve,
+              },
+              pickup.amount,
+            );
+            if (
+              next.mag !== run.mag ||
+              next.reserve !== run.reserve
+            ) {
+              run.mag = next.mag;
+              run.reserve = next.reserve;
+              pickup.alive = false;
+              this.scene.remove(pickup.mesh);
+              pickup.mesh.geometry.dispose();
+              (pickup.mesh.material as THREE.Material).dispose();
+              this.refreshHud();
+            }
+          }
         }
 
         // Projectile vs enemies / player
@@ -1035,7 +1158,13 @@ export class GameApp {
                 const dead = this.enemies.hurt(e, p.damage);
                 if (p.pierceLeft <= 0) this.projectiles.kill(p);
                 else p.pierceLeft -= 1;
-                if (dead) this.checkRoomClear();
+                if (dead) {
+                  if (run.lifesteal) {
+                    run.hp = Math.min(run.maxHp, run.hp + 1);
+                    this.refreshHud();
+                  }
+                  this.checkRoomClear();
+                }
                 break;
               }
             }
@@ -1054,7 +1183,8 @@ export class GameApp {
           if (!e.alive) continue;
           const dx = e.mesh.position.x - this.controller.x;
           const dz = e.mesh.position.z - this.controller.z;
-          const r = e.kind === 'boss' ? 0.9 : 0.65;
+          const r =
+            e.kind === 'boss' ? 0.9 : e.kind === 'tank' || e.kind === 'miniBoss' ? 0.75 : 0.65;
           if (dx * dx + dz * dz < r * r) {
             this.takeHit(e.contactDamage);
           }
