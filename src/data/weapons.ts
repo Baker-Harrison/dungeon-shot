@@ -5,6 +5,8 @@ export interface WeaponDef {
   name: string;
   /** Time between trigger pulls. */
   fireCooldownMs: number;
+  /** Time to finish a reload once started. */
+  reloadMs: number;
   /** Half-angle cone in degrees; 0 = perfectly accurate. */
   spreadDeg: number;
   /** Projectiles spawned per trigger pull. */
@@ -24,6 +26,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
     id: 'pulseRifle',
     name: 'Pulse Rifle',
     fireCooldownMs: 220,
+    reloadMs: 1400,
     spreadDeg: 2,
     pelletCount: 1,
     damage: 1,
@@ -36,6 +39,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
     id: 'scatterGun',
     name: 'Scatter Gun',
     fireCooldownMs: 480,
+    reloadMs: 1800,
     spreadDeg: 12,
     pelletCount: 5,
     damage: 1,
@@ -48,6 +52,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
     id: 'railSpike',
     name: 'Rail Spike',
     fireCooldownMs: 700,
+    reloadMs: 2100,
     spreadDeg: 0,
     pelletCount: 1,
     damage: 3,

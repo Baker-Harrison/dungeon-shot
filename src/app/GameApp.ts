@@ -1,13 +1,13 @@
 import * as THREE from 'three';
 import { OPPOSITE } from '../dungeon/types';
-import { rollUpgradeChoices } from '../dungeon/generate';
+import { rollUpgradeChoices, rollUpgradeOffer } from '../dungeon/generate';
 import { RUN_UPGRADES, type UpgradeId } from '../data/upgrades';
 import {
   META_UPGRADES,
   metaUpgradeCost,
   type MetaUpgradeId,
 } from '../data/metaUpgrades';
-import { applyAmmoPickup, reloadAmmo, trySpendAmmo } from '../data/ammo';
+import { applyAmmoPickup, canReload, reloadAmmo, trySpendAmmo } from '../data/ammo';
 import { aimWithSpread, getWeapon } from '../data/weapons';
 import {
   applyRunUpgrade,
@@ -21,7 +21,12 @@ import {
 } from '../state/session';
 import { addCurrency, loadMeta, saveMeta, setMetaLevel } from '../state/save';
 import { makeSeed } from '../util/rng';
-import { BASE_STATS, COLORS, PLAYER_RADIUS } from '../util/constants';
+import {
+  BASE_STATS,
+  COLORS,
+  PLAYER_RADIUS,
+  UPGRADE_OFFER_CHANCE,
+} from '../util/constants';
 import { FpsController } from '../fps/controller';
 import { Input } from '../fps/input';
 import {
@@ -58,8 +63,13 @@ export class GameApp {
   private input: Input;
   private uiRoot: HTMLElement;
   private hud!: HTMLElement;
-  private hpEl!: HTMLElement;
-  private metaEl!: HTMLElement;
+  private hudObjective!: HTMLElement;
+  private healthFill!: HTMLElement;
+  private healthText!: HTMLElement;
+  private weaponNameEl!: HTMLElement;
+  private ammoMagEl!: HTMLElement;
+  private ammoReserveEl!: HTMLElement;
+  private ammoHintEl!: HTMLElement;
   private crosshair!: HTMLElement;
   private clickTip!: HTMLElement;
   private minimapWrap!: HTMLElement;
@@ -76,6 +86,8 @@ export class GameApp {
   private projectiles: ProjectileSystem;
   private ammoPickups: AmmoPickup[] = [];
   private reloadWasDown = false;
+  private reloading = false;
+  private reloadEndsAt = 0;
 
   private screen: Screen = 'menu';
   private doorsLocked = false;
@@ -138,15 +150,37 @@ export class GameApp {
 
     this.hud = el('div');
     this.hud.id = 'hud';
-    const left = el('div', 'left');
-    this.hpEl = el('div', 'hp');
-    this.metaEl = el('div', 'meta');
-    left.append(this.hpEl, this.metaEl);
-    this.hud.appendChild(left);
+
+    this.hudObjective = el('div', 'hud-objective');
+    this.hud.appendChild(this.hudObjective);
+
+    const health = el('div', 'hud-health');
+    health.append(el('div', 'hud-chip', 'HP'));
+    const healthTrack = el('div', 'hud-health-track');
+    this.healthFill = el('div', 'hud-health-fill');
+    healthTrack.appendChild(this.healthFill);
+    this.healthText = el('div', 'hud-health-text');
+    health.append(healthTrack, this.healthText);
+    this.hud.appendChild(health);
+
+    const ammo = el('div', 'hud-ammo');
+    this.weaponNameEl = el('div', 'hud-weapon');
+    const ammoRow = el('div', 'hud-ammo-row');
+    this.ammoMagEl = el('span', 'hud-ammo-mag');
+    const ammoSep = el('span', 'hud-ammo-sep', '/');
+    this.ammoReserveEl = el('span', 'hud-ammo-reserve');
+    ammoRow.append(this.ammoMagEl, ammoSep, this.ammoReserveEl);
+    this.ammoHintEl = el('div', 'hud-ammo-hint', 'R RELOAD');
+    ammo.append(this.weaponNameEl, ammoRow, this.ammoHintEl);
+    this.hud.appendChild(ammo);
+
     this.uiRoot.appendChild(this.hud);
 
     this.crosshair = el('div');
     this.crosshair.id = 'crosshair';
+    for (const arm of ['n', 'e', 's', 'w']) {
+      this.crosshair.appendChild(el('span', `arm ${arm}`));
+    }
     this.uiRoot.appendChild(this.crosshair);
 
     this.clickTip = el('div');
@@ -315,6 +349,7 @@ export class GameApp {
   }
 
   private beginRun(): void {
+    this.cancelReload();
     startNewRun(getMeta(), makeSeed());
     this.runEnding = false;
     this.awaitingUpgrade = false;
@@ -329,8 +364,13 @@ export class GameApp {
     this.renderer.domElement.requestPointerLock();
   }
 
+  private cancelReload(): void {
+    this.reloading = false;
+    this.reloadEndsAt = 0;
+  }
+
   private showRunUi(): void {
-    this.hud.style.display = 'flex';
+    this.hud.style.display = 'block';
     this.crosshair.style.display = 'block';
     this.minimapWrap.style.display = 'block';
     this.clickTip.style.display = 'block';
@@ -445,9 +485,31 @@ export class GameApp {
     const run = getRun();
     const room = run.dungeon.rooms[run.currentRoomId]!;
     const weapon = getWeapon(run.weaponId);
-    this.hpEl.style.color = run.hp <= 1 ? '#fc8181' : '#e2e8f0';
-    this.hpEl.textContent = `HP ${run.hp}/${run.maxHp}   AMMO ${run.mag}/${run.maxMag} | ${run.reserve}   ${weapon.name}   DMG ${run.damage}   Pierce ${run.pierce}`;
-    this.metaEl.textContent = `SEC ${room.sectionIndex + 1}/${run.dungeon.sectionCount}   ${room.type.toUpperCase()}   ${run.roomsCleared}/${run.dungeon.combatCount} cleared   $${run.currencyEarned}   [R] reload   [M] map`;
+    const hpRatio = Math.max(0, Math.min(1, run.hp / Math.max(1, run.maxHp)));
+
+    this.hudObjective.textContent = `SEC ${room.sectionIndex + 1}/${run.dungeon.sectionCount}  ·  ${room.type.toUpperCase()}  ·  ${run.roomsCleared}/${run.dungeon.combatCount}  ·  $${run.currencyEarned}`;
+
+    this.healthFill.style.width = `${hpRatio * 100}%`;
+    this.healthText.textContent = `${run.hp} / ${run.maxHp}`;
+    this.hud.classList.toggle('low-hp', run.hp <= 1);
+    this.hud.classList.toggle('hurt', run.hp < run.maxHp && run.hp > 1);
+
+    this.weaponNameEl.textContent = weapon.name.toUpperCase();
+    this.ammoMagEl.textContent = String(run.mag);
+    this.ammoReserveEl.textContent = String(run.reserve);
+    const magEmpty = run.mag <= 0;
+    const magLow = run.mag > 0 && run.mag <= Math.max(1, Math.floor(run.maxMag * 0.25));
+    this.hud.classList.toggle('mag-empty', magEmpty);
+    this.hud.classList.toggle('mag-low', magLow && !magEmpty);
+    this.hud.classList.toggle('reloading', this.reloading);
+    if (this.reloading) {
+      this.ammoHintEl.textContent = 'RELOADING…';
+      this.ammoHintEl.classList.add('show');
+    } else {
+      this.ammoHintEl.textContent = 'R RELOAD';
+      this.ammoHintEl.classList.toggle('show', magEmpty && run.reserve > 0);
+    }
+
     this.drawMinimap();
   }
 
@@ -912,11 +974,14 @@ export class GameApp {
       return;
     }
     if (room.type === 'combat' || room.type === 'miniBoss') {
-      this.openUpgrade();
-      return;
+      if (rollUpgradeOffer(run.seed, run.roomsCleared, UPGRADE_OFFER_CHANCE)) {
+        this.openUpgrade();
+        return;
+      }
     }
     this.doorsLocked = false;
     setDoorsLocked(this.built.doors, false);
+    this.renderer.domElement.requestPointerLock();
   }
 
   private tryTravel(door: DoorTrigger): void {
@@ -1063,22 +1128,41 @@ export class GameApp {
           this.built.depth / 2 + 1,
         );
 
-        // Player fire (Ammo + Weapon fire pattern)
+        // Player fire + timed reload
+        const weapon = getWeapon(run.weaponId);
+        const ammoSnap = {
+          mag: run.mag,
+          reserve: run.reserve,
+          maxMag: run.maxMag,
+          maxReserve: run.maxReserve,
+        };
+
+        if (this.reloading && now >= this.reloadEndsAt) {
+          const reloaded = reloadAmmo(ammoSnap);
+          run.mag = reloaded.mag;
+          run.reserve = reloaded.reserve;
+          this.cancelReload();
+          this.refreshHud();
+        }
+
         const reloadDown = this.input.keys.has('KeyR');
-        if (reloadDown && !this.reloadWasDown) {
-          const ammo = reloadAmmo({
-            mag: run.mag,
-            reserve: run.reserve,
-            maxMag: run.maxMag,
-            maxReserve: run.maxReserve,
-          });
-          run.mag = ammo.mag;
-          run.reserve = ammo.reserve;
+        if (
+          reloadDown &&
+          !this.reloadWasDown &&
+          !this.reloading &&
+          canReload(ammoSnap)
+        ) {
+          this.reloading = true;
+          this.reloadEndsAt = now + weapon.reloadMs;
           this.refreshHud();
         }
         this.reloadWasDown = reloadDown;
 
-        if (this.input.fireHeld && now >= this.fireTimer) {
+        if (
+          this.input.fireHeld &&
+          !this.reloading &&
+          now >= this.fireTimer
+        ) {
           const spent = trySpendAmmo(
             {
               mag: run.mag,
@@ -1092,7 +1176,6 @@ export class GameApp {
             run.mag = spent.mag;
             run.reserve = spent.reserve;
             this.fireTimer = now + run.fireCooldownMs;
-            const weapon = getWeapon(run.weaponId);
             const origin = this.controller.camera.position.clone();
             const forward = this.controller.forward();
             for (let i = 0; i < weapon.pelletCount; i++) {

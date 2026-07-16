@@ -26,6 +26,11 @@ export function trySpendAmmo(ammo: AmmoState, amount = 1): AmmoState | null {
   return { ...ammo, mag: ammo.mag - amount };
 }
 
+/** True when magazine isn't full and reserve has Ammo to pull. */
+export function canReload(ammo: AmmoState): boolean {
+  return ammo.mag < ammo.maxMag && ammo.reserve > 0;
+}
+
 /** Move Ammo from reserve into magazine up to maxMag. */
 export function reloadAmmo(ammo: AmmoState): AmmoState {
   const need = ammo.maxMag - ammo.mag;

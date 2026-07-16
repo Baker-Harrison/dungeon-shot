@@ -17,7 +17,7 @@ export class FpsController {
   private readonly lookEuler = new THREE.Euler(0, 0, 0, 'YXZ');
 
   constructor(aspect: number) {
-    this.camera = new THREE.PerspectiveCamera(75, aspect, 0.05, 200);
+    this.camera = new THREE.PerspectiveCamera(95, aspect, 0.05, 200);
     this.camera.rotation.order = 'YXZ';
     this.camera.position.set(0, EYE_HEIGHT, 0);
   }

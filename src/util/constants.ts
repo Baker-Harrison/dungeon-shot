@@ -40,6 +40,9 @@ export const REWARDS = {
   deathBonusPerRoom: 2,
 } as const;
 
+/** Chance to open the Upgrade draft after clearing a combat / mini-boss Chamber. */
+export const UPGRADE_OFFER_CHANCE = 0.2;
+
 export function px(n: number): number {
   return n * WORLD_SCALE;
 }

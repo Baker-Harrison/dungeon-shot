@@ -29,6 +29,7 @@ describe('weapon catalog', () => {
     for (const w of Object.values(WEAPONS)) {
       expect(w.maxMag).toBeGreaterThan(0);
       expect(w.maxReserve).toBeGreaterThan(0);
+      expect(w.reloadMs).toBeGreaterThan(0);
     }
   });
 });

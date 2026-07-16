@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { generateDungeon, rollUpgradeChoices } from './generate';
+import { generateDungeon, rollUpgradeChoices, rollUpgradeOffer } from './generate';
 import { applyUpgrade, RUN_UPGRADES, type CombatStats } from '../data/upgrades';
 import { BASE_STATS } from '../util/constants';
 import { obstaclesForLayout } from './layouts';
@@ -113,5 +113,25 @@ describe('rollUpgradeChoices', () => {
     const ids = rollUpgradeChoices(1, 0, RUN_UPGRADES, 3);
     expect(ids).toHaveLength(3);
     expect(new Set(ids).size).toBe(3);
+  });
+});
+
+describe('rollUpgradeOffer', () => {
+  it('is deterministic for the same seed and roomsCleared', () => {
+    expect(rollUpgradeOffer(42, 3, 0.2)).toBe(rollUpgradeOffer(42, 3, 0.2));
+  });
+
+  it('never offers at chance 0 and always offers at chance 1', () => {
+    expect(rollUpgradeOffer(1, 0, 0)).toBe(false);
+    expect(rollUpgradeOffer(1, 0, 1)).toBe(true);
+  });
+
+  it('offers some but not all clears at mid chance', () => {
+    let hits = 0;
+    for (let rooms = 1; rooms <= 40; rooms++) {
+      if (rollUpgradeOffer(99, rooms, 0.2)) hits += 1;
+    }
+    expect(hits).toBeGreaterThan(1);
+    expect(hits).toBeLessThan(20);
   });
 });

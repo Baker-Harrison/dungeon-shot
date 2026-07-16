@@ -335,3 +335,13 @@ export function rollUpgradeChoices(
   }
   return result;
 }
+
+/** Seeded chance to offer an Upgrade draft after a Chamber clear. */
+export function rollUpgradeOffer(
+  seed: number,
+  roomsCleared: number,
+  chance: number,
+): boolean {
+  const rng = createRng(seed ^ (roomsCleared * 0x85ebca6b) ^ 0xc2b2ae35);
+  return rng() < chance;
+}
