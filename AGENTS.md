@@ -1,4 +1,5 @@
 ## Learned User Preferences
+- Do not use agent skills unless the user explicitly asks for a skill or names one
 - Prefers building games in the browser
 - Prefers a short procedural dungeon-crawl MVP before overworld or hub exploration
 - Prefers Phaser 3 + TypeScript + Vite over thinner custom renderer stacks for this project

@@ -21,6 +21,8 @@ export interface RunState {
   seed: number;
   dungeon: Dungeon;
   currentRoomId: string;
+  currentSectionIndex: number;
+  visitedRoomIds: string[];
   hp: number;
   maxHp: number;
   damage: number;
@@ -43,9 +45,8 @@ export function createBaseStatsFromMeta(meta: MetaState) {
     hp: maxHp,
     damage: BASE_STATS.damage + meta.upgrades.startDamage,
     fireCooldownMs: BASE_STATS.fireCooldownMs,
-    moveSpeed: Math.round(
+    moveSpeed:
       BASE_STATS.moveSpeed * (1 + 0.08 * meta.upgrades.startMoveSpeed),
-    ),
     pierce: BASE_STATS.pierce,
   };
 }

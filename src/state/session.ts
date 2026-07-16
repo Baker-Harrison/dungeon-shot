@@ -36,6 +36,8 @@ export function startNewRun(meta: MetaState, seed: number): RunState {
     seed,
     dungeon,
     currentRoomId: dungeon.startId,
+    currentSectionIndex: 0,
+    visitedRoomIds: [dungeon.startId],
     ...stats,
     roomsCleared: 0,
     currencyEarned: 0,
@@ -79,9 +81,20 @@ export function markRoomCleared(roomId: string): void {
   if (room.type === 'boss') {
     run.currencyEarned += REWARDS.bossKill;
     run.won = true;
+  } else if (room.type === 'miniBoss') {
+    run.currencyEarned += REWARDS.miniBossKill;
   } else if (room.type === 'combat') {
     run.currencyEarned += REWARDS.roomClear;
   }
+}
+
+export function markRoomVisited(roomId: string): void {
+  const run = getRun();
+  if (!run.visitedRoomIds.includes(roomId)) {
+    run.visitedRoomIds.push(roomId);
+  }
+  const room = run.dungeon.rooms[roomId];
+  if (room) run.currentSectionIndex = room.sectionIndex;
 }
 
 export function markPlayerDead(): void {

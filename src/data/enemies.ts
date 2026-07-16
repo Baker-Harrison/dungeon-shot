@@ -1,4 +1,4 @@
-export type EnemyKind = 'chaser' | 'shooter' | 'boss';
+export type EnemyKind = 'chaser' | 'shooter' | 'miniBoss' | 'boss';
 
 export interface EnemyDef {
   kind: EnemyKind;
@@ -26,6 +26,15 @@ export const ENEMY_DEFS: Record<EnemyKind, EnemyDef> = {
     shootCooldownMs: 1400,
     bulletDamage: 1,
     scoreValue: 2,
+  },
+  miniBoss: {
+    kind: 'miniBoss',
+    hp: 18,
+    speed: 95,
+    contactDamage: 2,
+    shootCooldownMs: 1100,
+    bulletDamage: 1,
+    scoreValue: 6,
   },
   boss: {
     kind: 'boss',

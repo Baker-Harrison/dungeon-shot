@@ -58,7 +58,7 @@ export function applyUpgrade(stats: CombatStats, id: UpgradeId): CombatStats {
       next.fireCooldownMs = Math.max(80, Math.round(next.fireCooldownMs * 0.85));
       break;
     case 'moveSpeed':
-      next.moveSpeed = Math.round(next.moveSpeed * 1.12);
+      next.moveSpeed = next.moveSpeed * 1.12;
       break;
     case 'maxHp':
       next.maxHp += 1;

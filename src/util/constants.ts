@@ -1,49 +1,44 @@
-export const GAME_WIDTH = 960;
-export const GAME_HEIGHT = 640;
+/** Legacy pixel sizes → Three.js world units. */
+export const WORLD_SCALE = 1 / 40;
 
-export const ROOM_WIDTH = 800;
-export const ROOM_HEIGHT = 480;
-export const WALL_THICKNESS = 24;
-export const DOOR_WIDTH = 64;
-
-export const DEPTH = {
-  floor: 0,
-  wall: 10,
-  door: 15,
-  bullet: 20,
-  enemy: 25,
-  player: 30,
-  ui: 100,
-} as const;
+export const EYE_HEIGHT = 1.6;
+export const PLAYER_RADIUS = 0.35;
+export const WALL_HEIGHT = 3.2;
+export const DOOR_WIDTH_WORLD = 1.8;
+export const WALL_THICKNESS_WORLD = 0.55;
 
 export const COLORS = {
-  bg: 0x1a1f2e,
-  floor: 0x2d3748,
-  wall: 0x4a5568,
-  doorLocked: 0x742a2a,
-  doorOpen: 0x276749,
-  player: 0x63b3ed,
+  bg: 0x1a2230,
+  floor: 0x4a5568,
+  wall: 0x718096,
+  ceiling: 0x2d3748,
+  doorLocked: 0x9b2c2c,
+  doorOpen: 0x38a169,
   bullet: 0xf6e05e,
   enemyBullet: 0xfc8181,
   chaser: 0xe53e3e,
   shooter: 0xd69e2e,
+  miniBoss: 0xed8936,
   boss: 0x9f7aea,
-  hp: 0xf56565,
-  text: '#e2e8f0',
 } as const;
 
 export const BASE_STATS = {
   maxHp: 5,
   damage: 1,
   fireCooldownMs: 220,
-  moveSpeed: 220,
-  bulletSpeed: 420,
+  moveSpeed: 5.5,
+  bulletSpeed: 28,
   pierce: 0,
   iFrameMs: 800,
 } as const;
 
 export const REWARDS = {
   roomClear: 5,
+  miniBossKill: 15,
   bossKill: 25,
   deathBonusPerRoom: 2,
 } as const;
+
+export function px(n: number): number {
+  return n * WORLD_SCALE;
+}

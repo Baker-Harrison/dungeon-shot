@@ -2,14 +2,36 @@ import type { EnemyKind } from '../data/enemies';
 
 export type Dir = 'N' | 'E' | 'S' | 'W';
 
-export type RoomType = 'start' | 'combat' | 'boss';
+export type RoomType = 'start' | 'combat' | 'miniBoss' | 'boss';
+
+export type LayoutId =
+  | 'open'
+  | 'pillars'
+  | 'centerBlock'
+  | 'splitLane'
+  | 'alcoves'
+  | 'arena';
+
+export type RoomSizeId = 'M' | 'L' | 'XL';
+
+export const ROOM_SIZES: Record<RoomSizeId, { width: number; height: number }> =
+  {
+    M: { width: 1000, height: 640 },
+    L: { width: 1200, height: 720 },
+    XL: { width: 1400, height: 800 },
+  };
 
 export interface RoomNode {
   id: string;
   type: RoomType;
-  /** Grid coords for layout */
+  /** Grid coords for layout / minimap */
   x: number;
   y: number;
+  sectionIndex: number;
+  sizeId: RoomSizeId;
+  width: number;
+  height: number;
+  layoutId: LayoutId;
   connections: Partial<Record<Dir, string>>;
   /** Enemy kinds to spawn (empty for start) */
   enemies: EnemyKind[];
@@ -22,6 +44,7 @@ export interface Dungeon {
   startId: string;
   bossId: string;
   combatCount: number;
+  sectionCount: number;
 }
 
 export const OPPOSITE: Record<Dir, Dir> = {
