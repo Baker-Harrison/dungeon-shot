@@ -2,7 +2,7 @@ import type { EnemyKind } from '../data/enemies';
 
 export type Dir = 'N' | 'E' | 'S' | 'W';
 
-export type RoomType = 'start' | 'combat' | 'miniBoss' | 'boss';
+export type RoomType = 'start' | 'combat' | 'miniBoss' | 'boss' | 'shop';
 
 export type LayoutId =
   | 'open'

@@ -44,6 +44,24 @@ describe('generateDungeon', () => {
     expect(a.sectionCount).toBe(b.sectionCount);
   });
 
+  it('places Shop Chambers with connections and no Enemies', () => {
+    let shopsFound = 0;
+    for (let seed = 1; seed <= 40; seed++) {
+      const d = generateDungeon(seed);
+      const shops = Object.values(d.rooms).filter((r) => r.type === 'shop');
+      shopsFound += shops.length;
+      for (const shop of shops) {
+        expect(shop.enemies).toEqual([]);
+        expect(shop.cleared).toBe(true);
+        expect(Object.keys(shop.connections).length).toBeGreaterThan(0);
+        for (const nextId of Object.values(shop.connections)) {
+          expect(d.rooms[nextId!]).toBeDefined();
+        }
+      }
+    }
+    expect(shopsFound).toBeGreaterThan(40);
+  });
+
   it('connects rooms bidirectionally and reaches boss from start', () => {
     const d = generateDungeon(99);
     for (const room of Object.values(d.rooms)) {

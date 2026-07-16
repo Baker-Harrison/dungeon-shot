@@ -149,6 +149,18 @@ export function ensureStyles(): void {
     }
     #hud.reloading .hud-ammo-hint { color: #63b3ed; }
     #hud .hud-ammo-hint.show { opacity: 1; }
+    #hud .hud-relics {
+      position: absolute;
+      left: 22px;
+      top: 16px;
+      font-size: 13px;
+      letter-spacing: 0.14em;
+      color: #f6e05e;
+      text-shadow: 0 1px 0 rgba(0,0,0,0.65);
+      padding: 6px 10px;
+      background: rgba(6, 12, 10, 0.55);
+      border: 1px solid rgba(214, 158, 46, 0.55);
+    }
     #crosshair {
       display: none;
       position: absolute;
@@ -192,7 +204,7 @@ export function ensureStyles(): void {
       color: #68d391;
       margin-bottom: 4px;
     }
-    #map-overlay, #upgrade-overlay, #pause-overlay, #iris {
+    #map-overlay, #upgrade-overlay, #shop-overlay, #pause-overlay, #iris {
       display: none; pointer-events: auto; position: absolute; inset: 0;
     }
     #map-overlay {
@@ -200,17 +212,17 @@ export function ensureStyles(): void {
       flex-direction: column; align-items: center; justify-content: center; gap: 16px;
     }
     #map-overlay.show { display: flex; }
-    #upgrade-overlay, #pause-overlay {
+    #upgrade-overlay, #shop-overlay, #pause-overlay {
       flex-direction: column; align-items: center; justify-content: center;
       background: rgba(5, 8, 6, 0.88);
       opacity: 0;
       transition: opacity 180ms ease-out;
     }
-    #upgrade-overlay.show, #pause-overlay.show {
+    #upgrade-overlay.show, #shop-overlay.show, #pause-overlay.show {
       display: flex;
       opacity: 1;
     }
-    #upgrade-overlay::before, #pause-overlay::before {
+    #upgrade-overlay::before, #shop-overlay::before, #pause-overlay::before {
       content: "";
       position: absolute; inset: 0; pointer-events: none;
       background: repeating-linear-gradient(
@@ -222,7 +234,7 @@ export function ensureStyles(): void {
       );
       opacity: 0.55;
     }
-    #upgrade-overlay::after, #pause-overlay::after {
+    #upgrade-overlay::after, #shop-overlay::after, #pause-overlay::after {
       content: "";
       position: absolute; inset: 0; pointer-events: none;
       background: radial-gradient(ellipse at center, transparent 35%, rgba(0, 0, 0, 0.55) 100%);
@@ -326,6 +338,68 @@ export function ensureStyles(): void {
       font-size: 11px;
       letter-spacing: 0.08em;
       color: #5a7364;
+    }
+    #shop-overlay .shop-panel {
+      position: relative; z-index: 1;
+      display: flex; flex-direction: column; align-items: stretch;
+      width: min(440px, calc(100vw - 48px));
+      gap: 10px;
+      padding: 22px 24px 18px;
+      border: 1px solid #744210;
+      background: rgba(14, 12, 8, 0.78);
+      box-shadow: inset 0 0 40px rgba(214, 158, 46, 0.06);
+    }
+    #shop-overlay .shop-title {
+      margin: 0;
+      font-size: 22px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      color: #f6e05e;
+      text-align: center;
+    }
+    #shop-overlay .shop-rule {
+      height: 1px;
+      background: linear-gradient(to right, transparent, #744210 20%, #d69e2e 50%, #744210 80%, transparent);
+      margin: 2px 0 8px;
+    }
+    #shop-overlay .shop-opts {
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    #shop-overlay .shop-opt {
+      display: flex; flex-direction: column; align-items: flex-start; gap: 4px;
+      width: 100%; min-width: 0;
+      text-align: left;
+      padding: 12px 14px;
+      background: rgba(0, 0, 0, 0.28);
+      border: 1px solid #744210;
+      color: #f6e05e;
+      font: inherit; font-size: 15px;
+      cursor: default;
+      transition: border-color 120ms ease, color 120ms ease, background 120ms ease;
+    }
+    #shop-overlay .shop-opt .opt-key { color: #faf089; font-weight: 600; letter-spacing: 0.04em; }
+    #shop-overlay .shop-opt .opt-name { color: #f6e05e; }
+    #shop-overlay .shop-opt .opt-tag {
+      font-size: 11px; font-weight: 700; letter-spacing: 0.08em; margin-right: 4px; color: #d69e2e;
+    }
+    #shop-overlay .shop-opt .opt-desc { color: #b7791f; font-size: 12px; line-height: 1.35; }
+    #shop-overlay .shop-opt:not(:disabled) { pointer-events: auto; cursor: pointer; opacity: 1; }
+    #shop-overlay .shop-opt:not(:disabled):hover,
+    #shop-overlay .shop-opt:not(:disabled):focus-visible {
+      border-color: #f6e05e;
+      color: #faf089;
+      background: rgba(214, 158, 46, 0.1);
+      outline: none;
+    }
+    #shop-overlay .shop-opt:not(:disabled):hover .opt-name,
+    #shop-overlay .shop-opt:not(:disabled):focus-visible .opt-name { color: #faf089; }
+    #shop-overlay .shop-opt.muted-opt .opt-name { color: #975a16; }
+    #shop-overlay .shop-hint {
+      margin: 10px 0 0;
+      text-align: center;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      color: #975a16;
     }
     #iris {
       pointer-events: none; z-index: 50;

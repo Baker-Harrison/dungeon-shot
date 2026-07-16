@@ -8,6 +8,8 @@ import {
   type MetaUpgradeId,
 } from '../data/metaUpgrades';
 import { applyAmmoPickup, canReload, reloadAmmo, trySpendAmmo } from '../data/ammo';
+import { rollShopOffers, type ShopOffer } from '../data/shop';
+import { getWeaponMod } from '../data/weaponMods';
 import { aimWithSpread, getWeapon } from '../data/weapons';
 import {
   applyRunUpgrade,
@@ -16,11 +18,13 @@ import {
   markPlayerDead,
   markRoomCleared,
   markRoomVisited,
+  purchaseRunShopOffer,
   setMeta,
   startNewRun,
+  tryGrantRelicDrop,
 } from '../state/session';
 import { addCurrency, loadMeta, saveMeta, setMetaLevel } from '../state/save';
-import { makeSeed } from '../util/rng';
+import { createRng, makeSeed } from '../util/rng';
 import {
   BASE_STATS,
   COLORS,
@@ -70,12 +74,14 @@ export class GameApp {
   private ammoMagEl!: HTMLElement;
   private ammoReserveEl!: HTMLElement;
   private ammoHintEl!: HTMLElement;
+  private relicsEl!: HTMLElement;
   private crosshair!: HTMLElement;
   private clickTip!: HTMLElement;
   private minimapWrap!: HTMLElement;
   private minimapCanvas!: HTMLCanvasElement;
   private mapOverlay!: HTMLElement;
   private upgradeOverlay!: HTMLElement;
+  private shopOverlay!: HTMLElement;
   private pauseOverlay!: HTMLElement;
   private iris!: HTMLElement;
   private panelHost!: HTMLElement;
@@ -92,6 +98,9 @@ export class GameApp {
   private screen: Screen = 'menu';
   private doorsLocked = false;
   private awaitingUpgrade = false;
+  private shopOpen = false;
+  private shopOffers: ShopOffer[] = [];
+  private killCount = 0;
   private upgradeArmed = false;
   private upgradeArmReady = false;
   private upgradeBlockUntilRelease = false;
@@ -174,6 +183,9 @@ export class GameApp {
     ammo.append(this.weaponNameEl, ammoRow, this.ammoHintEl);
     this.hud.appendChild(ammo);
 
+    this.relicsEl = el('div', 'hud-relics', 'RELICS 0');
+    this.hud.appendChild(this.relicsEl);
+
     this.uiRoot.appendChild(this.hud);
 
     this.crosshair = el('div');
@@ -204,6 +216,10 @@ export class GameApp {
     this.upgradeOverlay.id = 'upgrade-overlay';
     this.uiRoot.appendChild(this.upgradeOverlay);
 
+    this.shopOverlay = el('div');
+    this.shopOverlay.id = 'shop-overlay';
+    this.uiRoot.appendChild(this.shopOverlay);
+
     this.pauseOverlay = el('div');
     this.pauseOverlay.id = 'pause-overlay';
     this.uiRoot.appendChild(this.pauseOverlay);
@@ -228,7 +244,7 @@ export class GameApp {
 
     if (e.code === 'Escape') {
       e.preventDefault();
-      if (this.awaitingUpgrade || this.wiping || this.runEnding) return;
+      if (this.awaitingUpgrade || this.shopOpen || this.wiping || this.runEnding) return;
       if (this.mapOpen) {
         this.toggleMap(false);
         return;
@@ -244,7 +260,15 @@ export class GameApp {
     }
 
     if (e.code === 'KeyM') {
-      if (this.paused || this.awaitingUpgrade || this.wiping || this.runEnding) return;
+      if (
+        this.paused ||
+        this.awaitingUpgrade ||
+        this.shopOpen ||
+        this.wiping ||
+        this.runEnding
+      ) {
+        return;
+      }
       e.preventDefault();
       this.toggleMap();
     }
@@ -266,6 +290,7 @@ export class GameApp {
     if (
       this.paused ||
       this.awaitingUpgrade ||
+      this.shopOpen ||
       this.mapOpen ||
       this.wiping ||
       this.runEnding
@@ -353,6 +378,8 @@ export class GameApp {
     startNewRun(getMeta(), makeSeed());
     this.runEnding = false;
     this.awaitingUpgrade = false;
+    this.closeShopUi();
+    this.killCount = 0;
     this.wiping = false;
     this.mapOpen = false;
     this.closePause(false);
@@ -383,6 +410,7 @@ export class GameApp {
     this.clickTip.style.display = 'none';
     this.mapOverlay.classList.remove('show');
     this.upgradeOverlay.classList.remove('show');
+    this.closeShopUi();
     this.closePause(false);
     this.releasePointerLock();
   }
@@ -478,6 +506,10 @@ export class GameApp {
 
     this.travelLockUntil = this.clock + 600;
     this.refreshHud();
+
+    if (room.type === 'shop') {
+      this.openShop();
+    }
   }
 
   private refreshHud(): void {
@@ -497,6 +529,7 @@ export class GameApp {
     this.weaponNameEl.textContent = weapon.name.toUpperCase();
     this.ammoMagEl.textContent = String(run.mag);
     this.ammoReserveEl.textContent = String(run.reserve);
+    this.relicsEl.textContent = `RELICS ${run.relics}`;
     const magEmpty = run.mag <= 0;
     const magLow = run.mag > 0 && run.mag <= Math.max(1, Math.floor(run.maxMag * 0.25));
     this.hud.classList.toggle('mag-empty', magEmpty);
@@ -572,7 +605,9 @@ export class GameApp {
               ? '#9f7aea'
               : r.type === 'miniBoss'
                 ? '#ed8936'
-                : '#2d3748';
+                : r.type === 'shop'
+                  ? '#d69e2e'
+                  : '#2d3748';
       ctx.fillRect(px, py, cell, cell);
       if (cur) {
         ctx.strokeStyle = '#e2e8f0';
@@ -616,7 +651,15 @@ export class GameApp {
   }
 
   private toggleMap(force?: boolean): void {
-    if (this.paused || this.awaitingUpgrade || this.wiping || this.runEnding) return;
+    if (
+      this.paused ||
+      this.awaitingUpgrade ||
+      this.shopOpen ||
+      this.wiping ||
+      this.runEnding
+    ) {
+      return;
+    }
     this.mapOpen = force ?? !this.mapOpen;
     if (this.mapOpen) {
       this.releasePointerLock();
@@ -686,7 +729,9 @@ export class GameApp {
               ? '#9f7aea'
               : r.type === 'miniBoss'
                 ? '#ed8936'
-                : '#2d3748';
+                : r.type === 'shop'
+                  ? '#d69e2e'
+                  : '#2d3748';
       ctx.fillRect(px, py, cell, cell);
       if (cur) {
         ctx.strokeStyle = '#e2e8f0';
@@ -700,9 +745,11 @@ export class GameApp {
             ? 'B'
             : r.type === 'miniBoss'
               ? 'M'
-              : r.type === 'start'
-                ? 'S'
-                : '';
+              : r.type === 'shop'
+                ? '$'
+                : r.type === 'start'
+                  ? 'S'
+                  : '';
         if (label) {
           ctx.globalAlpha = 1;
           ctx.fillStyle = '#e2e8f0';
@@ -717,7 +764,15 @@ export class GameApp {
   }
 
   private openPause(): void {
-    if (this.paused || this.awaitingUpgrade || this.wiping || this.runEnding) return;
+    if (
+      this.paused ||
+      this.awaitingUpgrade ||
+      this.shopOpen ||
+      this.wiping ||
+      this.runEnding
+    ) {
+      return;
+    }
     if (this.mapOpen) this.toggleMap(false);
 
     this.paused = true;
@@ -809,6 +864,7 @@ export class GameApp {
   private abandonRun(dest: 'hub' | 'menu'): void {
     this.closePause(false);
     this.closeUpgradeUi();
+    this.closeShopUi();
     this.awaitingUpgrade = false;
     this.mapOpen = false;
     this.mapOverlay.classList.remove('show');
@@ -961,6 +1017,157 @@ export class GameApp {
     this.renderer.domElement.requestPointerLock();
   }
 
+  private openShop(): void {
+    this.closeShopUi();
+    this.shopOpen = true;
+    this.input.clearFire();
+    this.releasePointerLock();
+
+    const run = getRun();
+    this.shopOffers = rollShopOffers(
+      run.seed,
+      run.currentRoomId,
+      run.weaponId,
+      run.weaponMods,
+    );
+
+    this.renderShopOverlay();
+    this.shopOverlay.classList.add('show');
+    window.addEventListener('keydown', this.onShopKey);
+  }
+
+  private renderShopOverlay(): void {
+    const run = getRun();
+    this.shopOverlay.replaceChildren();
+
+    const panel = el('div', 'shop-panel');
+    panel.append(el('h2', 'shop-title', 'SHOP'));
+    panel.append(
+      el(
+        'p',
+        'shop-hint',
+        `Relics ${run.relics} · Weapon Mods change this Run's Weapon (not Upgrades)`,
+      ),
+    );
+    panel.append(el('div', 'shop-rule'));
+
+    const opts = el('div', 'shop-opts');
+    this.shopOffers.forEach((offer, i) => {
+      const btn = el('button', 'shop-opt');
+      btn.type = 'button';
+      const canBuy = run.relics >= offer.cost;
+      btn.disabled = !canBuy;
+      if (!canBuy) btn.classList.add('muted-opt');
+
+      const { title, desc, tag } = this.describeShopOffer(offer);
+      const line = el('div');
+      line.append(
+        el('span', 'opt-key', `[${i + 1}] `),
+        el('span', 'opt-tag', tag),
+        el('span', 'opt-name', ` ${title}`),
+        el('span', 'opt-key', ` · ${offer.cost} Relics`),
+      );
+      btn.append(line, el('div', 'opt-desc', desc));
+      btn.onclick = () => this.buyShopOffer(offer);
+      opts.appendChild(btn);
+    });
+    panel.appendChild(opts);
+
+    const leave = el('button', 'shop-opt');
+    leave.type = 'button';
+    const leaveLine = el('div');
+    leaveLine.append(
+      el('span', 'opt-key', '[Esc] '),
+      el('span', 'opt-name', 'Leave Shop'),
+    );
+    leave.append(
+      leaveLine,
+      el('div', 'opt-desc', 'Save Relics for a later Weapon Mod'),
+    );
+    leave.onclick = () => this.closeShop(true);
+    panel.appendChild(leave);
+
+    const hint = el('p', 'shop-hint', 'PRESS 1–9 TO BUY · LEAVE WITHOUT BUYING');
+    hint.id = 'shop-hint';
+    panel.appendChild(hint);
+    this.shopOverlay.appendChild(panel);
+  }
+
+  private describeShopOffer(offer: ShopOffer): {
+    title: string;
+    desc: string;
+    tag: string;
+  } {
+    if (offer.kind === 'heal') {
+      return {
+        title: `Heal +${offer.amount}`,
+        desc: 'Restore HP toward max (not an Upgrade)',
+        tag: 'HEAL',
+      };
+    }
+    if (offer.kind === 'ammoRefill') {
+      return {
+        title: 'Ammo Refill',
+        desc: 'Fill magazine and reserve up to current Ammo max',
+        tag: 'AMMO',
+      };
+    }
+    const mod = getWeaponMod(offer.modId);
+    return {
+      title: mod.name,
+      desc: mod.description,
+      tag: 'WEAPON MOD',
+    };
+  }
+
+  private onShopKey = (ev: KeyboardEvent): void => {
+    if (!this.shopOpen) return;
+    if (ev.code === 'Escape') {
+      ev.preventDefault();
+      this.closeShop(true);
+      return;
+    }
+    const n = Number(ev.key);
+    if (n < 1 || n > this.shopOffers.length) return;
+    const offer = this.shopOffers[n - 1];
+    if (offer) this.buyShopOffer(offer);
+  };
+
+  private buyShopOffer(offer: ShopOffer): void {
+    if (!this.shopOpen) return;
+    if (!purchaseRunShopOffer(offer)) {
+      this.renderShopOverlay();
+      this.refreshHud();
+      return;
+    }
+    this.refreshHud();
+    // Refresh offers so owned mods disappear and Relic costs update.
+    const run = getRun();
+    this.shopOffers = rollShopOffers(
+      run.seed,
+      run.currentRoomId,
+      run.weaponId,
+      run.weaponMods,
+    );
+    this.renderShopOverlay();
+  }
+
+  private closeShop(relock: boolean): void {
+    this.closeShopUi();
+    this.refreshHud();
+    if (relock && this.screen === 'run') {
+      this.renderer.domElement.requestPointerLock();
+    }
+  }
+
+  private closeShopUi(): void {
+    window.removeEventListener('keydown', this.onShopKey);
+    this.shopOpen = false;
+    this.shopOffers = [];
+    this.shopOverlay.classList.remove('show');
+    this.shopOverlay.replaceChildren();
+  }
+
   private checkRoomClear(): void {
     if (this.runEnding || !this.built) return;
     if (this.enemies.aliveCount() > 0) return;
@@ -985,7 +1192,9 @@ export class GameApp {
   }
 
   private tryTravel(door: DoorTrigger): void {
-    if (this.doorsLocked || this.awaitingUpgrade || this.wiping) return;
+    if (this.doorsLocked || this.awaitingUpgrade || this.shopOpen || this.wiping) {
+      return;
+    }
     if (this.clock < this.travelLockUntil) return;
     const run = getRun();
     const room = run.dungeon.rooms[run.currentRoomId]!;
@@ -1106,7 +1315,7 @@ export class GameApp {
     const pointerLocked =
       document.pointerLockElement === this.renderer.domElement;
 
-    if (this.screen === 'run' && !this.mapOpen && !this.awaitingUpgrade && !this.paused && !this.wiping && !this.runEnding) {
+    if (this.screen === 'run' && !this.mapOpen && !this.awaitingUpgrade && !this.shopOpen && !this.paused && !this.wiping && !this.runEnding) {
       this.clickTip.style.display = pointerLocked ? 'none' : 'block';
       const run = getRun();
       this.controller.update(dt, this.input, run.moveSpeed, pointerLocked);
@@ -1178,7 +1387,7 @@ export class GameApp {
             this.fireTimer = now + run.fireCooldownMs;
             const origin = this.controller.camera.position.clone();
             const forward = this.controller.forward();
-            for (let i = 0; i < weapon.pelletCount; i++) {
+            for (let i = 0; i < run.pelletCount; i++) {
               const spread = aimWithSpread(
                 forward,
                 weapon.spreadDeg * (run.spreadMult ?? 1),
@@ -1187,7 +1396,7 @@ export class GameApp {
               this.projectiles.spawn(
                 origin,
                 dir,
-                weapon.bulletSpeed,
+                run.bulletSpeed,
                 run.damage,
                 run.pierce,
                 true,
@@ -1242,6 +1451,11 @@ export class GameApp {
                 if (p.pierceLeft <= 0) this.projectiles.kill(p);
                 else p.pierceLeft -= 1;
                 if (dead) {
+                  this.killCount += 1;
+                  const dropRng = createRng(
+                    run.seed ^ (this.killCount * 0x9e3779b9) ^ 0x85ebca6b,
+                  );
+                  if (tryGrantRelicDrop(dropRng)) this.refreshHud();
                   if (run.lifesteal) {
                     run.hp = Math.min(run.maxHp, run.hp + 1);
                     this.refreshHud();

@@ -46,7 +46,7 @@ function rollSize(
   let sizeId: RoomSizeId;
   if (type === 'boss' || type === 'miniBoss') {
     sizeId = rng() < 0.5 ? 'L' : 'XL';
-  } else if (type === 'start') {
+  } else if (type === 'start' || type === 'shop') {
     sizeId = 'M';
   } else {
     const roll = rng();
@@ -58,7 +58,35 @@ function rollSize(
 
 function rollLayout(rng: () => number, type: RoomType): LayoutId {
   if (type === 'start' || type === 'boss' || type === 'miniBoss') return 'arena';
+  if (type === 'shop') return 'open';
   return pickCombatLayout(rng);
+}
+
+/** Attach one Shop Chamber to a Section combat room when space allows. */
+function tryPlaceShop(
+  rng: () => number,
+  rooms: Record<string, RoomNode>,
+  occupied: Set<string>,
+  sectionIndex: number,
+): void {
+  const hosts = Object.values(rooms).filter(
+    (r) => r.type === 'combat' && r.sectionIndex === sectionIndex,
+  );
+  for (let i = hosts.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [hosts[i], hosts[j]] = [hosts[j]!, hosts[i]!];
+  }
+  for (const host of hosts) {
+    const open = openDirsFor(host, occupied);
+    if (open.length === 0) continue;
+    const dir = open[Math.floor(rng() * open.length)]!;
+    const nx = host.x + DIR_DELTA[dir].x;
+    const ny = host.y + DIR_DELTA[dir].y;
+    const id = roomId(nx, ny);
+    const shop = makeRoom(rng, id, 'shop', nx, ny, sectionIndex, [], true);
+    attachRoom(host, shop, dir, rooms, occupied);
+    return;
+  }
 }
 
 function makeRoom(
@@ -223,6 +251,8 @@ export function generateDungeon(seed: number): Dungeon {
       attachRoom(from, node, dir, rooms, occupied);
       frontier.push(node);
     }
+
+    tryPlaceShop(rng, rooms, occupied, sectionIndex);
 
     // Loops after the section gate so we don't seal the mini-boss/boss cell.
     // (Loops applied once per section after gate placement below.)

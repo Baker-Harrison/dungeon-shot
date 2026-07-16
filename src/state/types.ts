@@ -1,5 +1,6 @@
 import type { MetaUpgradeId } from '../data/metaUpgrades';
 import type { UpgradeId } from '../data/upgrades';
+import type { WeaponModId } from '../data/weaponMods';
 import type { Dungeon } from '../dungeon/types';
 import {
   STARTER_WEAPON_ID,
@@ -43,6 +44,14 @@ export interface RunState {
   maxReserve: number;
   /** Multiplier on Weapon spreadDeg (1 = baseline). */
   spreadMult: number;
+  /** Effective pellet count after Weapon Mods. */
+  pelletCount: number;
+  /** Effective bullet speed after Weapon Mods. */
+  bulletSpeed: number;
+  /** In-run Relic currency (discarded when the Run ends). */
+  relics: number;
+  /** Purchased Weapon Mods for this Run. */
+  weaponMods: WeaponModId[];
   ricochet?: boolean;
   lifesteal?: boolean;
   roomsCleared: number;
@@ -75,6 +84,10 @@ export function createBaseStatsFromMeta(
     maxMag: ammo.maxMag,
     maxReserve: ammo.maxReserve,
     spreadMult: 1,
+    pelletCount: weapon.pelletCount,
+    bulletSpeed: weapon.bulletSpeed,
+    relics: 0,
+    weaponMods: [] as WeaponModId[],
     ricochet: false,
     lifesteal: false,
   };
