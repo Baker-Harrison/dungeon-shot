@@ -24,9 +24,6 @@ export class Input {
       if (document.getElementById('upgrade-overlay')?.classList.contains('show')) {
         return;
       }
-      if (document.getElementById('shop-overlay')?.classList.contains('show')) {
-        return;
-      }
       if (document.getElementById('map-overlay')?.classList.contains('show')) {
         return;
       }

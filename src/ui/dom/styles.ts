@@ -161,6 +161,24 @@ export function ensureStyles(): void {
       background: rgba(6, 12, 10, 0.55);
       border: 1px solid rgba(214, 158, 46, 0.55);
     }
+    #hud .interact-hint {
+      position: absolute;
+      left: 50%;
+      bottom: 96px;
+      transform: translateX(-50%);
+      padding: 10px 16px;
+      font-size: 13px;
+      letter-spacing: 0.08em;
+      color: #faf089;
+      background: rgba(12, 8, 14, 0.82);
+      border: 1px solid rgba(255, 79, 216, 0.65);
+      text-shadow: 0 1px 0 rgba(0,0,0,0.7);
+      white-space: nowrap;
+    }
+    #hud .interact-hint.cant-afford {
+      color: #fc8181;
+      border-color: rgba(229, 62, 62, 0.65);
+    }
     #crosshair {
       display: none;
       position: absolute;

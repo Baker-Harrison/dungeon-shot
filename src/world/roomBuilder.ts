@@ -9,6 +9,7 @@ import {
   px,
 } from '../util/constants';
 import { aabbFromCenter, type Aabb } from './colliders';
+import { placeNeonShopSign } from './neonSign';
 
 export interface DoorTrigger {
   dir: Dir;
@@ -22,6 +23,8 @@ export interface BuiltRoom {
   doors: DoorTrigger[];
   width: number;
   depth: number;
+  /** Emissive materials for Shop neon signs (flickered each frame). */
+  neonMaterials: THREE.MeshStandardMaterial[];
 }
 
 function mat(color: number): THREE.MeshStandardMaterial {
@@ -50,10 +53,42 @@ function addBox(
   return mesh;
 }
 
-export function buildRoom(room: RoomNode): BuiltRoom {
+function placeShopNeonAboveDoor(
+  group: THREE.Group,
+  neonMaterials: THREE.MeshStandardMaterial[],
+  dir: Dir,
+  dx: number,
+  dz: number,
+  inset: number,
+): void {
+  // Face into the room so the reader approaching the door sees SHOP correctly.
+  const face = new THREE.Vector3();
+  const origin = new THREE.Vector3();
+  const y = 2.55;
+  if (dir === 'N') {
+    origin.set(dx, y, dz + inset);
+    face.set(0, 0, 1);
+  } else if (dir === 'S') {
+    origin.set(dx, y, dz - inset);
+    face.set(0, 0, -1);
+  } else if (dir === 'W') {
+    origin.set(dx + inset, y, dz);
+    face.set(1, 0, 0);
+  } else {
+    origin.set(dx - inset, y, dz);
+    face.set(-1, 0, 0);
+  }
+  placeNeonShopSign(group, neonMaterials, origin, face, 0.48, 0xff4fd8);
+}
+
+export function buildRoom(
+  room: RoomNode,
+  allRooms?: Record<string, RoomNode>,
+): BuiltRoom {
   const group = new THREE.Group();
   const colliders: Aabb[] = [];
   const doors: DoorTrigger[] = [];
+  const neonMaterials: THREE.MeshStandardMaterial[] = [];
 
   const w = px(room.width);
   const depth = px(room.height);
@@ -228,6 +263,25 @@ export function buildRoom(room: RoomNode): BuiltRoom {
     if (dir === 'W') trigger.maxX += 0.8;
     if (dir === 'E') trigger.minX -= 0.8;
     doors.push({ dir, aabb: trigger, mesh });
+
+    const nextId = room.connections[dir];
+    const nextIsShop =
+      !!nextId && allRooms?.[nextId]?.type === 'shop';
+    const labelShop = room.type === 'shop' || nextIsShop;
+    if (labelShop) {
+      placeShopNeonAboveDoor(group, neonMaterials, dir, dx, dz, 0.28);
+    }
+  }
+
+  // Warm Shop fill so the neon reads against the walls
+  if (room.type === 'shop') {
+    const shopGlow = new THREE.PointLight(
+      0xff66aa,
+      1.6,
+      Math.max(w, depth) * 1.6,
+    );
+    shopGlow.position.set(0, 2.4, 0);
+    group.add(shopGlow);
   }
 
   // Light
@@ -240,7 +294,7 @@ export function buildRoom(room: RoomNode): BuiltRoom {
   group.add(new THREE.HemisphereLight(0xddeeff, 0x445566, 0.85));
   group.add(new THREE.AmbientLight(0xffffff, 0.55));
 
-  return { group, colliders, doors, width: w, depth };
+  return { group, colliders, doors, width: w, depth, neonMaterials };
 }
 
 export function setDoorsLocked(doors: DoorTrigger[], locked: boolean): void {
